@@ -37,6 +37,10 @@ proc InitializeMachine {} {
 	lappend Instructions {(bne|beq)\s+\$(\d+)\s*,\s*\&(\d+)\s*,\s*(\+?\d+|-\d+|0x[[:xdigit:]]+|[a-zA-z]\w+)}
 	#.word, I've decided isn't a command. It just tells me to load that value at that point in memory
 	#lappend Instructions {(\.word)\s+(\+?\d+|-\d+|0x[[:xdigit:]]+|[a-zA-Z]\w+)}
+	#Clear Labels
+	array unset Labels
+	#And memory
+	array unset VirtualMemory
 }
 
 ###
@@ -136,7 +140,7 @@ proc GetLabel {Name} {
 proc ParseInstruction {Inp} {
 	global Instructions
 	foreach Type $Instructions {
-		if {[regexp "^(?:[^;]*:)?\\s*$Type\\s*(?:;.*)?" $Inp Mat Command A1 A2 A3]} {
+		if {[regexp "^(?:\[^;\]*:)?\\s*$Type\\s*(?:;.*)?" $Inp Mat Command A1 A2 A3]} {
 			#All command functions must have 3 arguments, and if it doesn't need them, it can ignore them
 			eval [list MIPS_$Command $A1 $A2 $A3]
 			return
@@ -196,14 +200,37 @@ proc MIPS_sltu {A1 A2 A3} {
 #	A2: This is the second number
 #	A3: This isn't used
 ###
-proc MIPS_mult {A1 A2 A3} {
-	global MFHI MFLO
-	set V1 [format %08x [GetRegister $A1]]
-	set V2 [format %08x [GetRegister $A2]]
-	set a [string range $V1 0 3]
-	set b [string range $V1 4 end]
-	set c [string range $V2  0 3]
-	set d [string range $V2 4 end]
+if {0} {
+	proc MIPS_mult {A1 A2 A3} {
+		global MFHI MFLO
+		set V1 [GetRegister $A1]
+		set V2 [GetRegister $A2]
+		if {$V1==$V2==0} {
+			set MFLO 0
+			set MFHI 0
+			return
+		}
+		set Sign [expr {$V1/abs($V1) * $V2/abs($V2)}]
+
+		set V1 [format %08x [GetRegister $A1]]
+		set V2 [format %08x [GetRegister $A2]]
+		set a [expr 0x[string range $V1 0 3]]
+		set b [expr 0x[string range $V1 4 end]]
+		set c [expr 0x[string range $V2  0 3]]
+		set d [expr 0x[string range $V2 4 end]]
+		set MFLO [expr {$b*$d}]
+		set x [expr {$a*$d+$c*$b}]
+		set y [expr {(($MFLO >> 16) & 0xffff)+$x}]
+		set MFLO [expr {($MFLO & 0xffff) | (($y & 0xffff) << 16)}]
+		set MFHI [expr {($y >> 16) & 0xffff}]
+		set MFHI [expr {$MFHI + $a*$c}]
+	}
+} else {
+	proc MIPS_mult {A1 A2 A3} {
+		global MFHI MFLO
+		set MFHI "0"
+		set MFLO [expr {[GetRegister $A1]*[GetRegister $A2]}]
+	}
 }
 
 ###
@@ -215,6 +242,8 @@ proc MIPS_mult {A1 A2 A3} {
 ###
 proc MIPS_multu {A1 A2 A3} {
 	global MFHI MFLO
+	set MFHI 0
+	set MFLO [expr {[format %u [GetRegister $A1]] * [format %u [GetRegister $A1]]}]
 }
 
 ###
@@ -274,7 +303,7 @@ proc MIPS_lw {A1 A2 A3} {
 ##
 proc MIPS_lis {A1 A2 A3} {
 	global ProgramCounter
-	SetRegister $A1 [GetVirtualMemory $ProgramCounter]
+	SetRegister $A1 [GetVirtualMemory [expr {4*$ProgramCounter}]]
 	incr ProgramCounter
 }
 
@@ -389,3 +418,7 @@ proc GenerateRangeList {Start End} {
 }
 
 InitializeMachine
+set Registers(3) "-1"
+set Registers(4) "6"
+ParseInstruction {multu $3, $4}
+puts "$MFLO $MFHI"

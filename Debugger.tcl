@@ -34,7 +34,6 @@ proc ParseFile {Inp} {
 
 	#If a .word is reached that needs a label that has yet to be defined, add it to the array LabelNeeded for jump back
 	#Each item in the array is a named the name of the label, and it's value is a list of all positions in memory to add its value to
-
 	for {set i 0} {$i < [llength $Contents]} {incr i} {
 		set Item [lindex $Contents $i]
 		if {[regexp {^[^;]*:} $Item Label]} {
@@ -81,11 +80,97 @@ proc ParseFile {Inp} {
 					SetVirtualMemory [expr {4*[llength $Program]}] [expr {$Num}]
 				}
 			}
-			puts $Item
 			lappend Program $i
 		}
 	}
 	foreach Lost [array names LabelNeeded] {
 		error "The following label was never matched: $Lost"
+	}
+	UpdateLine
+}
+
+###
+#NextInstruction: This command runs the next instruction
+###
+proc NextInstruction {} {
+	global ProgramCounter Contents Program
+	set Com [lindex $Contents [lindex $Program $ProgramCounter]]
+	incr ProgramCounter
+	if {[catch {ParseInstruction $Com} ErrorMsg]} {
+		#Here, there was an error in this file
+		if {[string equal $ErrorMsg "Complete"]} {
+			tk_messageBox -message "Complete"
+			InitializeMachine
+		} else {
+			tk_messageBox -message "Error: $ErrorMsg
+			Line [lindex $Program [expr {$ProgramCounter-1}]]"
+		}
+	}
+	UpdateLine
+}
+
+###
+#UpdateLine: This function updates the highlighted line of the FileView to represent the next command to be executed
+###
+proc UpdateLine {} {
+	global ProgramCounter Program FileView CurrentItem
+	#$FileView selection clear 0 end
+	if {[info exists CurrentItem]} {
+		$FileView itemconfigure $CurrentItem -background ""
+	}
+	set CurrentItem [lindex $Program $ProgramCounter]
+	$FileView itemconfigure $CurrentItem  -background "red"
+	#$FileView selection set [lindex $Program $ProgramCounter]
+}
+
+###
+#CleanExit: This function is here, incase something needs to be done before exit
+###
+proc CleanExit {} {
+	exit
+}
+
+###
+#OpenMenu: This function runs the Open box from the menu
+###
+proc OpenMenu {} {
+	set File [tk_getOpenFile -defaultextension ".asm" -filetypes [list [list "Assembler Files" ".asm"] [list "All Files" "*"]]]
+	if {![regexp {^\s*$} $File]} {
+		#This is a file
+		InitializeMachine
+		LoadFile $File
+	}
+}
+
+#Draw the window
+set FileView [listbox .view -width 50 -height 20 -listvariable Contents -xscrollcommand ".vx set" -yscrollcommand ".vy set"]
+set FxScroll [scrollbar .vx -orient horizontal -command "$FileView xview"]
+set FyScroll [scrollbar .vy -orient vertical -command "$FileView yview"]
+grid $FileView $FyScroll
+grid $FxScroll
+grid $FileView -sticky news 
+grid $FyScroll -sticky ns
+grid $FxScroll -sticky ew
+grid rowconfig . 0 -weight 1
+grid columnconfig . 0 -weight 1
+
+#Set up the menu
+menu .menubar
+.menubar add cascade -label "File" -menu .menubar.file
+menu .menubar.file
+.menubar.file add command -label "Open File" -command OpenMenu
+.menubar.file add command -label "Exit" -command CleanExit
+.menubar add cascade -label "Debug" -menu .menubar.debug
+menu .menubar.debug
+.menubar.debug add command -label "Next Line" -command NextInstruction
+. configure -menu .menubar
+
+#If there's an input file, open it
+if {$argc > 0} {
+	if {[catch {
+		LoadFile [lindex $argv 0]
+		} ErrorMsg]} {
+		tk_messageBox -message "Error loading file:
+		$ErrorMsg"
 	}
 }
