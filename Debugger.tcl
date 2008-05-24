@@ -4,7 +4,6 @@
 #	Written by Christopher Vollick
 #	Also, license
 ################
-
 source Mips.tcl
 
 ###
@@ -151,6 +150,63 @@ proc OpenMenu {} {
 }
 
 ###
+#ToLine: This function will continue executing the file until the line that is given is the one the PC points to
+#	Or the file exits, whichever comes first
+#
+#	Line: This is the line to go to
+###
+proc ToLine {Line} {
+	global ProgramCounter Contents Program FileOpen
+	if {$FileOpen == 0} {
+		tk_messageBox -message "No Open File"
+		return
+	}
+	while {$Line != $ProgramCounter} {
+		set Com [lindex $Contents [lindex $Program $ProgramCounter]]
+		incr ProgramCounter
+		if {[catch {ParseInstruction $Com} ErrorMsg]} {
+			#Here, there was an error in this file
+			if {[string equal $ErrorMsg "Complete"]} {
+				tk_messageBox -message "Complete"
+				set ProgramCounter 0
+				break
+			} else {
+				tk_messageBox -message "Error: $ErrorMsg
+				Line [expr 1+[lindex $Program [expr {$ProgramCounter-1}]]]"
+				break
+			}
+		}
+	}
+	UpdateLine
+}
+
+###
+#ToCurrentLine: This function is a kind of front end for ToLine
+#	This one finds the line that has selection in the FileView and goes to that
+###
+proc ToCurrentLine {} {
+	global FileView Program
+	set C [$FileView curselection]
+	if {[llength $C] >0 } {
+		tk_messageBox -message $C
+		#There is a selected line
+		for {set i 0} {$i < [llength $Program]} {incr i} {
+			set Item [lindex $Program $i]
+			if {$C <= $Item} {
+				#This is the first item that is an actual instruction after the current pointer
+				ToLine $i
+				return
+			}
+		}
+		#If we're here, then there is no instruction after this line
+		#Just do until the last instruction
+		ToLine $Item
+	} else {
+		tk_messageBox -message "No currently selected line"
+	}
+}
+
+###
 #RegisterWindow: This function makes the window with all registers on it
 #
 #	Loc: This is where to draw it
@@ -201,12 +257,14 @@ menu .menubar.file
 .menubar add cascade -label "Debug" -menu .menubar.debug
 menu .menubar.debug
 .menubar.debug add command -label "Next Line" -command NextInstruction -accelerator "F7"
+.menubar.debug add command -label "To Current Line" -command ToCurrentLine -accelerator "F8"
 .menubar.debug add separator
 .menubar.debug add command -label "Display Registers" -command {RegisterWindow .reg} -accelerator "F6"
 . configure -menu .menubar
 
 bind . <F7> NextInstruction
 bind . <F6> {RegisterWindow .reg}
+bind . <F8> {ToCurrentLine}
 wm title . "MIPS Debugger"
 
 #Initialize the file open to 0
