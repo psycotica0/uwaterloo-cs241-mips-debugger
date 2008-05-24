@@ -13,6 +13,8 @@ source Mips.tcl
 #	Filename: Guess
 ###
 proc LoadFile {Filename} {
+	global FileOpen
+	set FileOpen 0
 	set F [open $Filename r]
 	ParseFile [read $F]
 	close $F
@@ -29,8 +31,9 @@ proc LoadFile {Filename} {
 #	Inp: This is the contents of a MIPS asm file.
 ###
 proc ParseFile {Inp} {
-	global Contents Program Labels
+	global Contents Program Labels FileOpen
 	set Contents [split $Inp "\n"]
+	set Program ""
 
 	#If a .word is reached that needs a label that has yet to be defined, add it to the array LabelNeeded for jump back
 	#Each item in the array is a named the name of the label, and it's value is a list of all positions in memory to add its value to
@@ -56,9 +59,9 @@ proc ParseFile {Inp} {
 				set Labels($L) [llength $Program]
 			}
 		}
-		if {[regexp {^(?:[^;]*:)?([^;:]+)(;.*)?$} $Item Mat Command]} {
+		if {[regexp {^(?:[^;]*:)?([A-Za-z.][^:;]*)(;.*)?$} $Item Mat Command]} {
 			#This is a line with more than Labels or comments on it
-			if {[regexp {\.word\s+([+-]?\d|0x[[:xdigit:]]+|[a-zA-Z]\w+)} $Mat M Num]} {
+			if {[regexp {\.word\s+([+-]?\d|0x[[:xdigit:]]+|[a-zA-Z]\w+)} $Item M Num]} {
 				#This line must be added to the virtual memory for lis to work
 				if {[regexp {^[a-zA-Z]} $Num]} {
 					#This is a label
@@ -87,23 +90,28 @@ proc ParseFile {Inp} {
 		error "The following label was never matched: $Lost"
 	}
 	UpdateLine
+	set FileOpen 1
 }
 
 ###
 #NextInstruction: This command runs the next instruction
 ###
 proc NextInstruction {} {
-	global ProgramCounter Contents Program
+	global ProgramCounter Contents Program FileOpen
+	if {$FileOpen == 0} {
+		tk_messageBox -message "No Open File"
+		return
+	}
 	set Com [lindex $Contents [lindex $Program $ProgramCounter]]
 	incr ProgramCounter
 	if {[catch {ParseInstruction $Com} ErrorMsg]} {
 		#Here, there was an error in this file
 		if {[string equal $ErrorMsg "Complete"]} {
 			tk_messageBox -message "Complete"
-			InitializeMachine
+			set ProgramCounter 0
 		} else {
 			tk_messageBox -message "Error: $ErrorMsg
-			Line [lindex $Program [expr {$ProgramCounter-1}]]"
+			Line [expr 1+[lindex $Program [expr {$ProgramCounter-1}]]]"
 		}
 	}
 	UpdateLine
@@ -142,6 +150,36 @@ proc OpenMenu {} {
 	}
 }
 
+###
+#RegisterWindow: This function makes the window with all registers on it
+#
+#	Loc: This is where to draw it
+###
+proc RegisterWindow {Loc} {
+	if {[winfo exists $Loc]} {
+		destroy $Loc
+		return
+	} 
+	toplevel $Loc 
+	wm title $Loc "Registers"
+	bind $Loc <F6> {RegisterWindow .reg}
+	bind $Loc <F7> {NextInstruction}
+	#This makes an N by M array of boxes with the correct label
+	set N 4
+	set M 8
+	for {set m 0} {$m < $M} {incr m} {
+		set ListOfStuff ""
+		for {set n 0} {$n < $N} {incr n} {
+			#Draw
+			set Number [expr {$m*$N+$n}]
+			set La [label $Loc.l$Number -text $Number]
+			set Box [entry $Loc.e$Number -textvariable Registers($Number)]
+			append ListOfStuff "$La $Box "
+		}
+		eval grid $ListOfStuff
+	}
+}
+
 #Draw the window
 set FileView [listbox .view -width 50 -height 20 -listvariable Contents -xscrollcommand ".vx set" -yscrollcommand ".vy set"]
 set FxScroll [scrollbar .vx -orient horizontal -command "$FileView xview"]
@@ -162,9 +200,17 @@ menu .menubar.file
 .menubar.file add command -label "Exit" -command CleanExit
 .menubar add cascade -label "Debug" -menu .menubar.debug
 menu .menubar.debug
-.menubar.debug add command -label "Next Line" -command NextInstruction
+.menubar.debug add command -label "Next Line" -command NextInstruction -accelerator "F7"
+.menubar.debug add separator
+.menubar.debug add command -label "Display Registers" -command {RegisterWindow .reg} -accelerator "F6"
 . configure -menu .menubar
 
+bind . <F7> NextInstruction
+bind . <F6> {RegisterWindow .reg}
+wm title . "MIPS Debugger"
+
+#Initialize the file open to 0
+set FileOpen 0
 #If there's an input file, open it
 if {$argc > 0} {
 	if {[catch {

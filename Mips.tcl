@@ -34,7 +34,7 @@ proc InitializeMachine {} {
 	lappend Instructions {(mult|multu|div|divu)\s+\$(\d+)\s*,\s*\$(\d+)}
 	lappend Instructions {(mfhi|mflo|lis|jr|jalr)\s+\$(\d+)}
 	lappend Instructions {(lw|sw)\s+\$(\d+)\s*,\s*(\+?\d+|-\d+|0x[[:xdigit:]]+)\s*\(\$(\d+)\)}
-	lappend Instructions {(bne|beq)\s+\$(\d+)\s*,\s*\&(\d+)\s*,\s*(\+?\d+|-\d+|0x[[:xdigit:]]+|[a-zA-z]\w+)}
+	lappend Instructions {(bne|beq)\s+\$(\d+)\s*,\s*\$(\d+)\s*,\s*(\+?\d+|-\d+|0x[[:xdigit:]]+|[a-zA-z]\w+)}
 	#.word, I've decided isn't a command. It just tells me to load that value at that point in memory
 	#lappend Instructions {(\.word)\s+(\+?\d+|-\d+|0x[[:xdigit:]]+|[a-zA-Z]\w+)}
 	#Clear Labels
@@ -418,7 +418,3 @@ proc GenerateRangeList {Start End} {
 }
 
 InitializeMachine
-set Registers(3) "-1"
-set Registers(4) "6"
-ParseInstruction {multu $3, $4}
-puts "$MFLO $MFHI"
