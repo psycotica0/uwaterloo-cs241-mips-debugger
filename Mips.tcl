@@ -136,7 +136,7 @@ proc GetLabel {Name} {
 proc ParseInstruction {Inp} {
 	global Instructions
 	foreach Type $Instructions {
-		if {[regexp "^(?:.*:)?\\s*$Type\\s*(?:;.*)?" $Inp Mat Command A1 A2 A3]} {
+		if {[regexp "^(?:[^;]*:)?\\s*$Type\\s*(?:;.*)?" $Inp Mat Command A1 A2 A3]} {
 			#All command functions must have 3 arguments, and if it doesn't need them, it can ignore them
 			eval [list MIPS_$Command $A1 $A2 $A3]
 			return
@@ -275,6 +275,7 @@ proc MIPS_lw {A1 A2 A3} {
 proc MIPS_lis {A1 A2 A3} {
 	global ProgramCounter
 	SetRegister $A1 [GetVirtualMemory $ProgramCounter]
+	incr ProgramCounter
 }
 
 ###
