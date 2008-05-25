@@ -58,7 +58,7 @@ proc ParseFile {Inp} {
 				set Labels($L) [llength $Program]
 			}
 		}
-		if {[regexp {^(?:[^;]*:)?([A-Za-z.][^:;]*)(;.*)?$} $Item Mat Command]} {
+		if {[regexp {^(?:[^;]*:)?\s*([A-Za-z.][^:;]*)(;.*)?$} $Item Mat Command]} {
 			#This is a line with more than Labels or comments on it
 			if {[regexp {\.word\s+([+-]?\d|0x[[:xdigit:]]+|[a-zA-Z]\w+)} $Item M Num]} {
 				#This line must be added to the virtual memory for lis to work
@@ -79,7 +79,7 @@ proc ParseFile {Inp} {
 					}
 				} else {
 					#This is not a label, but a single value
-					SetVirtualMemory [expr {4*[llength $Program]}] [expr {$Num}]
+					SetVirtualMemory [expr {4*[llength $Program]}] [format %i [expr {$Num}]]
 				}
 			}
 			lappend Program $i
@@ -126,6 +126,7 @@ proc UpdateLine {} {
 		$FileView itemconfigure $CurrentItem -background ""
 	}
 	set CurrentItem [lindex $Program $ProgramCounter]
+	$FileView see $CurrentItem
 	$FileView itemconfigure $CurrentItem  -background "red"
 	#$FileView selection set [lindex $Program $ProgramCounter]
 }
@@ -188,7 +189,6 @@ proc ToCurrentLine {} {
 	global FileView Program
 	set C [$FileView curselection]
 	if {[llength $C] >0 } {
-		tk_messageBox -message $C
 		#There is a selected line
 		for {set i 0} {$i < [llength $Program]} {incr i} {
 			set Item [lindex $Program $i]
@@ -234,7 +234,62 @@ proc RegisterWindow {Loc} {
 		}
 		eval grid $ListOfStuff
 	}
+	#For standard output
+	entry $Loc.stdout -textvariable Output -state disabled
+	label $Loc.lout -text "Output:"
+	grid $Loc.lout $Loc.stdout
+	$Loc.e0 configure -state disabled
 }
+
+###
+#ArrayEditor: This function creates a window that allows for editing and creating of an array
+#	It will be, for now at least, just a comma separated list of items to write into memory just after the commands and a button to write them, and a button to write the address into register 1
+#
+#	Loc: This is the location to draw it at
+###
+proc ArrayEditor {Loc} {
+	if {[winfo exists $Loc]} {
+		destroy $Loc
+		return
+	} else {
+		#Draw the thing
+		toplevel $Loc
+		wm title $Loc "Array Editor"
+		set La [label $Loc.label -text "Comma Separated List:"]
+		set CSV [entry $Loc.csv -textvariable ArrayCSV]
+		bind $CSV <Return> "WriteArray $Loc"
+		set Write [button $Loc.write -text "Write to Memory" -command "WriteArray $Loc"]
+		grid $La $CSV 
+		grid x $Write
+		grid $CSV -sticky news
+	}
+}
+
+###
+#WriteArray: This function takes the csv from ArrayCSV and puts them into an array after the current program
+#
+#	Loc: This is the address of the window to close
+###
+proc WriteArray {Loc } {
+	global ArrayCSV Program
+	set Items [split $ArrayCSV ","]
+	set Start [expr {4*[llength $Program]}]
+	SetRegister 1 $Start
+	set Count 0
+	foreach Item $Items {
+		if {![regexp {^\s*[+-]?\d+\s*$} $Item]} {
+			#Skip items that aren't numbers
+			continue
+		}
+		SetVirtualMemory $Start $Item
+		incr Count
+		incr Start 4
+	}
+	SetRegister 2 $Count
+	#Close the window
+	ArrayEditor $Loc
+}
+
 
 #Draw the window
 set FileView [listbox .view -width 50 -height 20 -listvariable Contents -xscrollcommand ".vx set" -yscrollcommand ".vy set"]
@@ -260,6 +315,7 @@ menu .menubar.debug
 .menubar.debug add command -label "To Current Line" -command ToCurrentLine -accelerator "F8"
 .menubar.debug add separator
 .menubar.debug add command -label "Display Registers" -command {RegisterWindow .reg} -accelerator "F6"
+.menubar.debug add command -label "Array Editor" -command {ArrayEditor .ary}
 . configure -menu .menubar
 
 bind . <F7> NextInstruction
@@ -271,10 +327,20 @@ wm title . "MIPS Debugger"
 set FileOpen 0
 #If there's an input file, open it
 if {$argc > 0} {
-	if {[catch {
-		LoadFile [lindex $argv 0]
-		} ErrorMsg]} {
-		tk_messageBox -message "Error loading file:
-		$ErrorMsg"
+	if {[string equal [lindex $argv 0] "-"]} {
+		#Read from stdin
+		if {[catch {
+			ParseFile [read stdin]
+			} ErrorMsg]} {
+			tk_messageBox -message "Error loading from stdin: 
+			$ErrorMsg"
+		}
+	} else {
+		if {[catch {
+			LoadFile [lindex $argv 0]
+			} ErrorMsg]} {
+			tk_messageBox -message "Error loading file:
+			$ErrorMsg"
+		}
 	}
 }

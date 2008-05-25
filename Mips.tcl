@@ -86,15 +86,15 @@ proc GetRegister {Reg} {
 ###
 proc SetVirtualMemory {Loc Val} {
 	global Output VirtualMemory
+	if {$Loc == [format %i [expr 0xffff000c]]} {
+		append Output [format %c $Val]
+		return 
+	}
 	if {$Loc < 0 || $Loc > [expr 0x100000]} {
 		error "Invalid Memory Location"
 	}
 	if {fmod($Loc, 4) != 0} {
 		error "Unaligned Memory Access"
-	}
-	if {$Loc == 0xffff000c} {
-		lappend Output [format %c $Val]
-		return 
 	}
 	set VirtualMemory($Loc) $Val
 }
@@ -266,7 +266,7 @@ proc MIPS_div {A1 A2 A3} {
 #	A2: This is the second number
 #	A3: This is not used
 ###
-proc MIPS_div {A1 A2 A3} {
+proc MIPS_divu {A1 A2 A3} {
 	global MFHI MFLO
 	set MFLO [expr {int([format %u [GetRegister $A1]]/[format %u [GetRegister $A2]])}]
 	set MFHI [expr {[format %u [GetRegister $A1]] % [format %u [GetRegister $A2]]}]
