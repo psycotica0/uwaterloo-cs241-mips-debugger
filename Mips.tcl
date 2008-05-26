@@ -168,7 +168,7 @@ proc MIPS_add {A1 A2 A3} {
 #	A3: This is the second thing
 ###
 proc MIPS_sub {A1 A2 A3} {
-	SetRegister $A1 [expr {[GetRegister $A2] + [GetRegister $A3]}]
+	SetRegister $A1 [expr {[GetRegister $A2] - [GetRegister $A3]}]
 }
 
 ###
@@ -190,7 +190,7 @@ proc MIPS_slt {A1 A2 A3} {
 #	A3: This is the second number
 ###
 proc MIPS_sltu {A1 A2 A3} {
-	SetRegister $A1 [expr {[format %u [GetRegister $A2]] < [format %u [GetRegister $A2]]}]
+	SetRegister $A1 [expr {[format %u [GetRegister $A2]] < [format %u [GetRegister $A3]]}]
 }
 
 ###
@@ -243,7 +243,7 @@ if {0} {
 proc MIPS_multu {A1 A2 A3} {
 	global MFHI MFLO
 	set MFHI 0
-	set MFLO [expr {[format %u [GetRegister $A1]] * [format %u [GetRegister $A1]]}]
+	set MFLO [expr {[format %u [GetRegister $A1]] * [format %u [GetRegister $A2]]}]
 }
 
 ###

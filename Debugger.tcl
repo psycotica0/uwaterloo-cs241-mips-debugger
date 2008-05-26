@@ -30,9 +30,14 @@ proc LoadFile {Filename} {
 #	Inp: This is the contents of a MIPS asm file.
 ###
 proc ParseFile {Inp} {
-	global Contents Program Labels FileOpen
+	global Contents Program Labels FileOpen ProgramCounter CurrentItem FileView
 	set Contents [split $Inp "\n"]
 	set Program ""
+	set ProgramCounter 0
+	if {[info exists CurrentItem]} {
+		$FileView itemconfigure $CurrentItem -background ""
+		unset CurrentItem
+	}
 
 	#If a .word is reached that needs a label that has yet to be defined, add it to the array LabelNeeded for jump back
 	#Each item in the array is a named the name of the label, and it's value is a list of all positions in memory to add its value to
@@ -60,7 +65,7 @@ proc ParseFile {Inp} {
 		}
 		if {[regexp {^(?:[^;]*:)?\s*([A-Za-z.][^:;]*)(;.*)?$} $Item Mat Command]} {
 			#This is a line with more than Labels or comments on it
-			if {[regexp {\.word\s+([+-]?\d|0x[[:xdigit:]]+|[a-zA-Z]\w+)} $Item M Num]} {
+			if {[regexp {\.word\s+([+-]?\d+|0x[[:xdigit:]]+|[a-zA-Z]\w+)} $Item M Num]} {
 				#This line must be added to the virtual memory for lis to work
 				if {[regexp {^[a-zA-Z]} $Num]} {
 					#This is a label
@@ -121,6 +126,15 @@ proc NextInstruction {} {
 ###
 proc UpdateLine {} {
 	global ProgramCounter Program FileView CurrentItem
+	if {$ProgramCounter >= [llength $Program]} {
+		#There's a big problem here.
+		#Either the code has made a jump to a register that isn't supposed to be jumped to
+		#Or the code didn't have a jr $31 at the end
+		tk_messageBox -message "Error: The code has started executing arbitrary areas in memory. 
+		This is probably due to an invalid jump, or not exiting to the OS properly."
+		set ProgramCounter 0
+		return
+	}
 	#$FileView selection clear 0 end
 	if {[info exists CurrentItem]} {
 		$FileView itemconfigure $CurrentItem -background ""
